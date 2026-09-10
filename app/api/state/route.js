@@ -16,6 +16,11 @@ function guard(stored, incoming, me) {
   const isAdmin = admins.some((a) => a.toLowerCase() === me.name.toLowerCase());
   if (isAdmin) return { ok: true };
   if (!(stored.employees || []).length && !(stored.transfers || []).length) return { ok: true }; // перше наповнення
+  // Якщо адміністраторів ще нема — дозволяємо першому, хто увійшов, призначити себе
+  // (те саме, що клієнт уже показує тостом у signIn()), навіть якщо в довіднику є дані.
+  if (!admins.length && (incoming.admins || []).length === 1 && incoming.admins[0].toLowerCase() === me.name.toLowerCase()) {
+    return { ok: true };
+  }
 
   const mine = (t) => (t.partnerEmail && me.email && t.partnerEmail.toLowerCase() === me.email)
     || (t.partner || "").toLowerCase() === me.name.toLowerCase();
