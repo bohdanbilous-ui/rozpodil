@@ -333,6 +333,13 @@ export default function TransferDesk() {
         setPersistent(remote._persistent !== false);
         applyState(remote);
         if ((remote.employees || []).length) setSelectedId(remote.employees[0].id);
+        // Перший, хто увійшов, коли адміністраторів ще нема, отримує права —
+        // перевіряємо це вже ПІСЛЯ того, як стан зі сховища застосований,
+        // щоб не було гонки з паралельним записом.
+        if (!(remote.admins || []).length && user.name) {
+          setAdmins([user.name]); untomb("a:" + user.name);
+          setToast(user.name + " — перший, хто увійшов, тому отримує права адміністратора. Решту призначайте в довіднику.");
+        }
         setSyncAt(new Date()); setSyncState("ok");
       } catch (e) { onApiError(e); }
     })();
@@ -417,10 +424,10 @@ export default function TransferDesk() {
     setUser({ ...u, signedInAt: new Date().toISOString() });
     setLoginError("");
     if (u.name && !partners.some((p) => p.toLowerCase() === u.name.toLowerCase())) setPartners((p) => [...p, u.name]);
-    if (admins.length === 0 && u.name) {
-      setAdmins([u.name]); untomb("a:" + u.name);
-      setToast(u.name + " — перший, хто увійшов, тому отримує права адміністратора. Решту призначайте в довіднику.");
-    }
+    // Призначення першого адміна відкладене до завершення початкового
+    // завантаження стану з сервера (див. useEffect нижче): якщо зробити це
+    // тут одразу, паралельний GET при вході перезапише admins порожнім
+    // масивом зі сховища раніше, ніж локальна правка встигне зберегтися.
   }
   function signOut() { tokenRef.current = ""; setUser(null); setLoginPick(""); setLoginName(""); lastSync.current = ""; }
 
