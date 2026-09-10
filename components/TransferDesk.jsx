@@ -279,15 +279,31 @@ export default function TransferDesk() {
   const snap = () => ({ employees, projects, partners, reasons, transfers, admins, log, deleted });
   stateRef.current = snap();
 
+  // Ключове: форма тут має 1-в-1 збігатись із snap() — інакше порівняння
+  // JSON.stringify(snap()) === lastSync.current ніколи не спрацює, і клієнт
+  // піде в нескінченний цикл self-sync, який затирає щойно введені правки.
+  const pickSnap = (d) => ({
+    employees: d.employees || [],
+    projects: d.projects || [],
+    partners: d.partners || [],
+    reasons: (d.reasons || []).length ? d.reasons : SEED_REASONS,
+    transfers: (d.transfers || []).map((t) => ({ ...t, from: asAlloc(t.from), to: asAlloc(t.to) })),
+    admins: d.admins || [],
+    log: d.log || [],
+    deleted: d.deleted || {},
+  });
+
   function applyState(d) {
-    setEmployees(d.employees || []);
-    setProjects(d.projects || []);
-    setPartners(d.partners || []);
-    setReasons((d.reasons || []).length ? d.reasons : SEED_REASONS);
-    setTransfers((d.transfers || []).map((t) => ({ ...t, from: asAlloc(t.from), to: asAlloc(t.to) })));
-    setAdmins(d.admins || []);
-    setLog(d.log || []);
-    setDeleted(d.deleted || {});
+    const n = pickSnap(d);
+    setEmployees(n.employees);
+    setProjects(n.projects);
+    setPartners(n.partners);
+    setReasons(n.reasons);
+    setTransfers(n.transfers);
+    setAdmins(n.admins);
+    setLog(n.log);
+    setDeleted(n.deleted);
+    lastSync.current = JSON.stringify(n);
   }
 
   useEffect(() => {
@@ -316,7 +332,6 @@ export default function TransferDesk() {
         const remote = await api.get({ token: tokenRef.current, name: user.name });
         setPersistent(remote._persistent !== false);
         applyState(remote);
-        lastSync.current = JSON.stringify(remote);
         if ((remote.employees || []).length) setSelectedId(remote.employees[0].id);
         setSyncAt(new Date()); setSyncState("ok");
       } catch (e) { onApiError(e); }
@@ -328,8 +343,7 @@ export default function TransferDesk() {
     try {
       if (!silent) setSyncState("saving");
       const merged = await api.put({ token: tokenRef.current, name: user.name }, stateRef.current);
-      const json = JSON.stringify(merged);
-      if (json !== lastSync.current) { lastSync.current = json; applyState(merged); }
+      if (JSON.stringify(pickSnap(merged)) !== lastSync.current) applyState(merged);
       setSyncAt(new Date()); setSyncState("ok");
     } catch (e) { onApiError(e); }
   }
